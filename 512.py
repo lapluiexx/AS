@@ -5,21 +5,6 @@ from ecdsa import NIST521p, SigningKey, BadSignatureError
 from ecdsa.util import sigencode_der, sigdecode_der
 
 
-# --- ZKP Simulator ---
-class Groth16Simulator:
-    def setup(self, relation_logic):
-        self.relation_logic = relation_logic
-        return {"alg": "Groth16-P521", "type": "pk"}, {"alg": "Groth16-P521", "type": "vk"}
-
-    def prove(self, pk, stmt, wit):
-        if self.relation_logic(stmt, wit):
-            return b"simulated_proof_p521"
-        return None
-
-    def verify(self, vk, stmt, proof):
-        return proof == b"simulated_proof_p521"
-
-
 # --- AS-ECDSA Implementation (P-521 + Figure 3 Logic) ---
 class AS_ECDSA_521:
     def __init__(self):
