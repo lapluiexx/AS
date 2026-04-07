@@ -4,22 +4,6 @@ import os
 from ecdsa import NIST384p, SigningKey, BadSignatureError
 from ecdsa.util import sigencode_der, sigdecode_der
 
-
-# --- ZKP Simulator ---
-class Groth16Simulator:
-    def setup(self, relation_logic):
-        self.relation_logic = relation_logic
-        return {"alg": "Groth16-P384", "type": "pk"}, {"alg": "Groth16-P384", "type": "vk"}
-
-    def prove(self, pk, stmt, wit):
-        if self.relation_logic(stmt, wit):
-            return b"simulated_proof_p384"
-        return None
-
-    def verify(self, vk, stmt, proof):
-        return proof == b"simulated_proof_p384"
-
-
 # --- AS-ECDSA Implementation (P-384 + Figure 3 Logic) ---
 class AS_ECDSA_384:
     def __init__(self):
