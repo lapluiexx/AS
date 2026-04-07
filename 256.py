@@ -4,22 +4,60 @@ import os
 from ecdsa import SECP256k1, SigningKey, BadSignatureError
 from ecdsa.util import sigencode_der, sigdecode_der
 
+class RealGroth16Prover:
+    def __init__(self):
+        # 路径配置
+        self.wasm_path = "./ASzkp256_js/ASzkp256.wasm"
+        self.witness_gen_path = "./ASzkp256_js/generate_witness.js"
+        self.zkey_path = "./ASzkp256_0001.zkey" # 确保你已经生成了最终的 zkey
+        self.vkey_path = "./verification_key.json"
 
-# --- ZKP Simulator ---
-class Groth16Simulator:
-    def setup(self, relation_logic):
-        self.relation_logic = relation_logic
-        return {"alg": "Groth16", "type": "pk"}, {"alg": "Groth16", "type": "vk"}
+    def prove(self, stmt, wit):
+        """
+        真正调用 snarkjs 生成证明
+        stmt: (pk_bytes, m_hash, sigma)
+        wit: (seed, k)
+        """
+        pk_x, pk_y, m_hash_int, r, s = stmt
+        seed, k = wit
 
-    def prove(self, pk, stmt, wit):
-        # 模拟证明生成：运行电路逻辑检查 witness 是否有效
-        if self.relation_logic(stmt, wit):
-            return b"simulated_proof"
-        return None
+        # 1. 准备 input.json
+        input_data = {
+            "pk_x": to_limbs(pk_x),
+            "pk_y": to_limbs(pk_y),
+            "r": to_limbs(r),
+            "m_hash": to_limbs(m_hash_int),
+            "s": to_limbs(s),
+            "seed": to_limbs(int.from_bytes(seed, 'big')),
+            "k_nonce": to_limbs(k)
+        }
+        
+        with open("temp_input.json", "w") as f:
+            json.dump(input_data, f)
 
-    def verify(self, vk, stmt, proof):
-        return proof == b"simulated_proof"
+        # 2. 生成 Witness
+        # 这一步通常很快 (几十到几百ms)
+        subprocess.run(["node", self.witness_gen_path, self.wasm_path, "temp_input.json", "temp_witness.wtns"], 
+                       capture_output=True, check=True)
 
+        # 3. 生成 Proof (核心耗时点)
+        # 我们测量这整个过程的时间
+        start = time.perf_counter()
+        subprocess.run(["snarkjs", "groth16", "prove", self.zkey_path, "temp_witness.wtns", "temp_proof.json", "temp_public.json"],
+                       capture_output=True, check=True)
+        end = time.perf_counter()
+
+        return "real_proof_data", (end - start) * 1000
+
+    def verify(self):
+        """
+        真正调用 snarkjs 验证证明
+        """
+        start = time.perf_counter()
+        result = subprocess.run(["snarkjs", "groth16", "verify", self.vkey_path, "temp_public.json", "temp_proof.json"],
+                                capture_output=True, text=True)
+        end = time.perf_counter()
+        return "OK" in result.stdout, (end - start) * 1000
 
 # --- AS-ECDSA Implementation (Based on Figure 3) ---
 class AS_ECDSA:
